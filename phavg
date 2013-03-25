@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+require 'RMagick'
+require "docopt"
+require 'debugger'
+
+doc = <<DOCOPT
+avghash
+
+Usage:
+  #{__FILE__} <file>...
+  #{__FILE__} -h | --help
+  #{__FILE__} --version
+
+Options:
+  -d | --debug  Debug info
+
+DOCOPT
+
+def avg_hash_64(file)
+  begin
+    img = Magick::Image.read(file).first
+    # resize! squishes to requested size via without cropping
+    i64 = img.resize!(8,8)
+    i64g = i64.quantize(256, Magick::GRAYColorspace)
+
+    # resize to 1x1 to get average pixel
+    i1g = i64g.resize(1,1)
+    avg = i1g.pixel_color(0,0)
+
+    puts "i64g.depth: #{i64g.depth}" if $debug
+    puts "avg: #{avg}, i1g.depth: #{i1g.depth}" if $debug
+
+    # walk the 8x8 image. pixels lighter than average=1, rest = 0
+    bits = []
+    i64g.each_pixel { |pp, xx, yy|
+      puts "[#{xx},#{yy}] : #{pp}"  if $debug
+      pp > avg ? bits << 1 : bits << 0
+      puts if yy == 7 if $debug
+    }
+    # array to base2, then convert to hex
+    return "%x" % bits.join.to_i(2)  
+  rescue => e
+    puts "Error processing #{e}"
+  end
+
+
+end
+
+if $0 == __FILE__
+  begin
+    opts = Docopt::docopt(doc)
+    $debug = true if opts['--debug']
+    opts['<file>'].each { |ff|
+      puts "#{ff}: #{avg_hash_64(ff)}"
+    }
+  rescue #Docopt::Exit => e
+    puts e.message
+  end
+end
